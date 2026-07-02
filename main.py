@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+import asyncio
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from parser import parse_job_message
@@ -103,7 +104,39 @@ async def handle_new_message(event):
     else:
         logger.info("Message did not match the job posting format. Ignored.")
 
+async def handle_health_check(reader, writer):
+    try:
+        await reader.readuntil(b"\r\n\r\n")
+    except asyncio.IncompleteReadError:
+        pass
+    
+    response = (
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: 2\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "OK"
+    )
+    writer.write(response.encode("utf-8"))
+    await writer.drain()
+    writer.close()
+    try:
+        await writer.wait_closed()
+    except Exception:
+        pass
+
+async def start_health_check_server():
+    port = int(os.getenv("PORT", "10000"))
+    server = await asyncio.start_server(handle_health_check, "0.0.0.0", port)
+    logger.info(f"Health check server started on port {port}")
+    asyncio.create_task(server.serve_forever())
+
 async def main():
+    # Start dummy health check server if PORT is set (useful for Render web service)
+    if os.getenv("PORT"):
+        await start_health_check_server()
+
     logger.info("Starting Telegram listener...")
     
     # Authenticate as bot if BOT_TOKEN is provided, otherwise as user
@@ -125,7 +158,6 @@ async def main():
     await client.run_until_disconnected()
 
 if __name__ == "__main__":
-    import asyncio
     try:
         # Run client main loop
         client.loop.run_until_complete(main())
