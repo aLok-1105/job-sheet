@@ -76,8 +76,16 @@ for item in GROUP_IDS_STR.split(","):
 logger.info(f"Configured to listen to chats: {target_chats}")
 
 # Initialize Telegram client
-# Telethon will use the session file to store authorization state.
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+# Telethon will use the session file or string session to store authorization state.
+STRING_SESSION = os.getenv("TELEGRAM_STRING_SESSION")
+if STRING_SESSION:
+    from telethon.sessions import StringSession
+    logger.info("Initializing Telegram client with String Session...")
+    client = TelegramClient(StringSession(STRING_SESSION), API_ID, API_HASH)
+else:
+    logger.info(f"Initializing Telegram client with Session File '{SESSION_NAME}'...")
+    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+
 
 @client.on(events.NewMessage(chats=target_chats))
 async def handle_new_message(event):
